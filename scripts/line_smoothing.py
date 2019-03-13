@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 
 import numpy as np
 import numpy.linalg as LA
@@ -14,10 +14,11 @@ DT = 1./25 # fixed DT
 
 # TODO -- regression algorithm
 
+
 class InterpolatePoints():
     def __init__(self, n_iteration_points=10, n_loops=0):
         self.n_iteration_points = n_iteration_points
-        self.n_loopps = n_loops # number times the points are looped (-1==inf)
+        self.n_loops = n_loops # number times the points are looped (-1==inf)
         
         self.vel_boundary = np.zeros((N_JOINTS, 2))
         self.pos_boundary = np.zeros((N_JOINTS, 3))
@@ -42,7 +43,7 @@ class InterpolatePoints():
 
         self.dt = 0.01
         self.time = 0
-        attr_margin = 0.01 # set margin
+        attr_margin = 0.1 # set margin
 
         self.positions = np.zeros((N_JOINTS, 2))
         self.it_loop = 1
@@ -57,14 +58,15 @@ class InterpolatePoints():
         while True:
             self.callback_pos()
 
-            print('dist attr', self.get_distance_from_attractor())
+            import pdb; pdb.set_trace() ## DEBUG ##
+            
             if self.get_distance_from_attractor() < attr_margin:
                 if goal_attr_reached:
                     break 
-                
                 self.it_attr += 1
                 goal_attr_reached = self.update_boundary_conditions()
-                
+
+                print('it loop', self.it_loop)
                 positions_attr[:, self.it_attr] = self.pos_boundary[:,1]
                 
             vel = self.get_interpolated_velocity()
@@ -78,7 +80,7 @@ class InterpolatePoints():
             if not(self.it_loop%100):
                 print('Loop #', self.it_loop)
             
-            if self.it_loop > 100:
+            if self.it_loop > 10:
                 break
 
         # import pdb; pdb.set_trace() # set breakpoint
@@ -91,12 +93,13 @@ class InterpolatePoints():
         
         for ii in range(N_JOINTS):
             plt.subplot(N_JOINTS, 1, ii+1)
-            plt.plot(t_loop, self.positions[ii,:], '.')
             plt.plot(t_attr, positions_attr[ii,:self.it_attr], 'ro')
-            
-        plt.show()
-        
+            plt.plot(t_loop, self.positions[ii,:], '.')
 
+        plt.ion()
+        plt.show()
+        import pdb; pdb.set_trace() ## DEBUG ##
+        
     def get_interpolated_velocity(self):
         dt = self.time - self.t0
         vel = (self.spline_factors[:,0] + self.spline_factors[:,1]*dt
@@ -105,10 +108,12 @@ class InterpolatePoints():
         # LIMIT maximum speed
         return vel
 
-    
     def get_distance_from_attractor(self):
-        return LA.norm((self.pos_boundary[:, 1] - self.joint_pos))
-
+        delta_pos =  self.pos_boundary[:, 1] - self.joint_pos
+        return LA.norm((delta_pos))
+        # Get distance only points which are on the 'wrong' side
+        # ind_wrong = (self.pos_boundary[:, 2]-self.joint_pos)*delta_pos < 0
+        # return LA.norm((delta_pos[ind_wrong]))
 
     def update_boundary_conditions(self):
         # return (normal=0) -- (shutdown=1)
@@ -137,6 +142,9 @@ class InterpolatePoints():
         # Calculate dt based on position 
         dt = DT
         self.vel_boundary[:, 1] = (self.pos_boundary[:, 2]-self.pos_boundary[:, 1])/dt
+        ind_directionChange = (self.vel_boundary[:,0] * self.vel_boundary[:,1])
+        self.vel_boundary[ind_directionChange, 1] = 0
+        
         
         # spline approximation ORDER == 4
         # x(t) = c_0 + c_1*t + + c_2*t^2 + + c_3*t^3
@@ -144,8 +152,8 @@ class InterpolatePoints():
         self.spline_factors[:, 0] = self.pos_boundary[:, 0]
         self.spline_factors[:, 1] = self.vel_boundary[:, 0]
 
-        c_matr_inv = LA.inv(np.array(([[dt**2, dt**3],
-                                       [2*dt, 3*dt**2]])))
+        c_matr_inv = LA.pinv(np.array(([[dt**2, dt**3],
+                                        [2*dt, 3*dt**2]])))
                           
         for ii in range(N_JOINTS):
             c_vect = np.array(([self.pos_boundary[ii, 1]-self.spline_factors[ii,0]-self.spline_factors[ii,1]*dt,
@@ -156,14 +164,11 @@ class InterpolatePoints():
             self.spline_factors[ii,3] = c_vect[1]
                 
         return 0 # continue loops
-        
 
     def callback_pos(self):
         self.joint_pos = self.positions[:,self.it_loop]
         self.joint_vel = (self.positions[:,self.it_loop]-self.positions[:,self.it_loop-1])/self.dt
         self.time = self.time + self.dt
-        
-
 
 def __main__():
     InterpolatePoints_isnt = InterpolatePoints()
