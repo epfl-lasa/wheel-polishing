@@ -21,7 +21,8 @@ import warnings
 import json
 
 import warnings
-import signals
+import sys
+import signal
 
 # import os
 # os.chdir("/home/lukas/catkin_ws/src/wheel_polishing/scripts/")
@@ -31,7 +32,9 @@ import signals
 from multiprocessing import Lock
 
 N_JOINTS = 6 # == DIM
-N_JOINTS = 1 # == DIM
+JOINT_NAMES = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
+               'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
+
 
 # DT = 1./25 # fixed DT
 DT_INPUT = 0.04 # make sure this is bigger than self.dt_pub
@@ -56,19 +59,9 @@ class ReplayCallibration():
         self.dt_pub = 1./self.freq
         self.rate = rospy.Rate(self.freq)    # Frequency 10Hz
 
-        while not (self.recieved_jointState_msg):
-            rospy.sleep(0.5)
-            print("Waiting for first callbacks...")
-            if rospy.is_shutdown():
-                print('Shuting down')
-                break
-            
         self.n_iteration_points = n_iteration_points
         self.n_loops = n_loops # number times the points are looped (-1==inf)
         
-        self.vel_boundary = np.zeros((N_JOINTS, 2))
-        self.pos_boundary = np.zeros((N_JOINTS, 2))
-        self.dt_pub_interval = np.ones(2) * DT_INPUT
 
         self.data_points = []
         with open('../data/ridgeback_calibration_v2.json') as json_data:
@@ -80,72 +73,49 @@ class ReplayCallibration():
 
     
     def run(self):
-        self.dt_pub = 0.01
-        self.time = 0
         attr_margin = 0.01 # set margin
-
-        self.time_attr = self.time
-
-        self.positions = np.zeros((N_JOINTS, 2))
-        self.t_loop = [0, self.dt_pub]
-        
-        self.it_loop = 1
-
+        self.time_attr = rospy.get_time()
         goal_attr_reached = False
-
-        # positions_attr = np.zeros((N_JOINTS, self.n_points))
-        # velocities_attr = np.zeros((N_JOINTS, self.n_points))
-        # time_attr = np.zeros(self.n_points)
-
         self.spline_factors = np.zeros((N_JOINTS, 4)) # spline 4 order
+
+        while not (self.recieved_jointState_msg):
+            rospy.sleep(0.5)
+            print("Waiting for first callbacks...")
+            if rospy.is_shutdown():
+                print('Shuting down')
+                break
+        # TODO more general, to include more points in spline
+        self.pos_boundary = np.tile(self.joint_pos, (2,1)).T
+        self.vel_boundary = np.zeros((N_JOINTS, 2))
         
         self.it_attr = 0
+        self.it_loop = 0
 
-        self.callback_pos()
-
-        self.time += self.dt_pub
-
-        while True:
+        while not rospy.is_shutdown():
             # TODO update spline each loop to have flexible DS
             self.update_spline()
+            self.update_velocity(vel_limit=0.1)
 
-            vel = self.get_interpolated_velocity()
-
-            self.positions = np.vstack((self.positions.T, self.joint_pos + vel*self.dt_pub)).T
-            t_loop = self.time
-            self.t_loop.append(t_loop)
-
-            
             if self.get_distance_from_attractor() < attr_margin:
-                print('Reached attractor #{}'.format(self.it_attr))
+                print('Reached attractor #{} of {}'.format(self.it_attr, self.n_points))
                 if goal_attr_reached:
                     print('Movement is finished.')
                     break
                 
-                # positions_attr[:, self.it_attr] = self.pos_boundary[:,1]
-                # velocities_attr[:, self.it_attr] = self.vel_boundary[:,1]
-                # time_attr[self.it_attr] = self.time
-                
                 self.it_attr += 1
-                self.time_attr = self.time
+                self.time_attr = rospy.get_time()
 
                 goal_attr_reached = self.update_boundary_conditions()
                 
-            self.callback_pos()
-            self.time += self.dt_pub
             self.it_loop += 1
 
             if not(self.it_loop%100):
                 print('Loop #', self.it_loop)
-
-            # TODO for continous movement implement integer maximumx detection
-
-            # if self.it_loop > 10000:
-                # print('Maximum loop number reached')
-                # break
+            self.rate.sleep()
         
     def shutdown_command(self, signal, frame):
-        print('See you next time')
+        # TODO activate after CTRL-c
+        print('Shuting down....')
 
         msg_jointVel = JointTrajectory()
         msg_jointVel.header.stamp = rospy.Time.now()
@@ -154,14 +124,15 @@ class ReplayCallibration():
         # msg_jointVel.points.velocities = des_joint_vel.tolist()
 
         newPoint = JointTrajectoryPoint()
-        
-        msg_jointVel.points.append(newPoint)
+        newPoint.newPoint.velocities = np.zeros(self.joint_pos).tolist()
+        newPoint.newPoint.velocities = np.zeros(N_JOINTS).tolist()
+        for ii in range(3): # repeat several times
+            msg_jointVel.points.append(newPoint)
 
         self.pub_jointVel.publish(msg_jointVel)
         
         rospy.signal_shutdown('User shutdown.')
-        print('shudown finished')
-
+        print('See you next time')
         
     def update_spline(self):
         # Create a curve  of the form spline approximation ORDER == 4
@@ -173,7 +144,7 @@ class ReplayCallibration():
         self.spline_factors[:, 1] = self.vel_boundary[:, 0]
 
         # Time to next goal
-        dt = np.max([self.time_attr+DT_INPUT-self.time, self.dt_pub*1.0])
+        dt = np.max([self.time_attr+DT_INPUT-rospy.get_time(), self.dt_pub*1.0])
         c_matr = np.array(([[dt**2, dt**3],
                             [2*dt, 3*dt**2]]))
         c_matr_inv = LA.inv(c_matr)
@@ -199,8 +170,14 @@ class ReplayCallibration():
         newPoint = JointTrajectoryPoint()
         newPoint.positions = (self.joint_pos + self.dt_pub*des_joint_vel).tolist()
         newPoint.velocities = des_joint_vel.tolist()
-        # WARNING: The robot input message and control message have
-        # a  mapping this has to be applied before sending commands:
+
+        # if not(self.it_loop%5):
+            # print('des_joint', des_joint_vel)
+            # print('actual_joint', self.joint_vel)
+            # print('next via point', self.pos_boundary[:, 1])
+
+        # !!! WARNING !!! The robot input message and control message have a different mapping. 
+        # I.e. a mapping needs to be applied before sending commands as follows (0<->2):
         # joint mapping [ur5/joint_states -> ur5/ur_driver/joint_speed]
         # ur5_arm_shoulder_pan_joint=2 -> 0
         # 1 -> 1
@@ -259,6 +236,7 @@ class ReplayCallibration():
             self.vel_boundary[:, 1] = self.data_points[self.it_attr]['velocity'][:N_JOINTS]
         return 0 # continue loops
 
+
     def callback_jointState(self, msg):
         with self.mutex:
             # TODO apply transform to np.array only when used
@@ -276,7 +254,6 @@ if __name__ == '__main__':
         print('Input argmunt', sys.argv)
         
         ReplayCallibration_instance = ReplayCallibration('conveyerBelt_basket')
-        
         signal.signal(signal.SIGINT, ReplayCallibration_instance.shutdown_command)
 
         if not rospy.is_shutdown():
