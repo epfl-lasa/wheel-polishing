@@ -36,13 +36,13 @@ JOINT_NAMES = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
                'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
 
 # JOINT_NAMES = ['ur5_arm_elbow_joint', 'ur5_arm_shoulder_lift_joint', 'ur5_arm_shoulder_pan_joint', 'ur5_arm_wrist_1_joint', 'ur5_arm_wrist_2_joint', 'ur5_arm_wrist_3_joint']
-        # joint mapping [ur5/joint_states -> ur5/ur_driver/joint_speed]
-        # ur5_arm_shoulder_pan_joint=2 -> 0
-        # ur5_arm_shoulder_lift_joint=1 -> 1
-        # ur5_arm_shoulder_lift_shoulder=0 -> 2
-        # 3 -> 3
-        # 4 -> 4
-        # 5 -> 5
+# joint mapping [ur5/joint_states -> ur5/ur_driver/joint_speed]
+# ur5_arm_shoulder_pan_joint=2 -> 0
+# ur5_arm_shoulder_lift_joint=1 -> 1
+# ur5_arm_shoulder_lift_shoulder=0 -> 2
+# 3 -> 3
+# 4 -> 4
+# 5 -> 5
 
 
 
@@ -72,8 +72,6 @@ class MoveWheel():
         # self.pub_cartVel = rospy.Publisher("/ur5/ur5_cartesian_velocity_controller_sim/command_cart_vel", cartesian_state_msg.PoseTwist, queue_size=10)
         # self.pub_cartVel = rospy.Publisher("/ur5/ur5_cartesian_velocity_controller_sim/command_cart_vel", Twist, queue_size=10)
         self.pub_jointVel = rospy.Publisher("/ur5/ur_driver/joint_speed", JointTrajectory, queue_size=5)
-
-
         
         # First subscriber call back variable
         self.recieved_eeVel_msg = False
@@ -113,8 +111,7 @@ class MoveWheel():
     def run(self):
         
         self.itCount = 0
-        if not rospy.is_shutdown():
-            print('Start wheel movement.')
+        print('Start wheel movement.')
             
         # Entering UPDATE loop
         while not rospy.is_shutdown():
@@ -301,7 +298,6 @@ class MoveWheel():
             if not self.recieved_jointState_msg:
                 self.recieved_jointState_msg = True
                 print("Recieved first joint state")
-                
 
 
     def callback_controlMode(self, msg):
@@ -322,7 +318,8 @@ if __name__ == '__main__':
         
         signal.signal(signal.SIGINT, MoveWheel_Instance.shutdown_command)
 
-        MoveWheel_Instance.run()
+        if not rospy.is_shutdown():
+            MoveWheel_Instance.run()
         
     except rospy.ROSInterruptException:
         pass
