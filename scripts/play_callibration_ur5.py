@@ -8,6 +8,7 @@ Movement of the wheel fro the r5
 '''
 
 import rospy
+import rospkg
 from sensor_msgs.msg import JointState
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from geometry_msgs.msg import TwistStamped, Twist, Pose, PoseStamped
@@ -15,6 +16,8 @@ from geometry_msgs.msg import TwistStamped, Twist, Pose, PoseStamped
 import numpy as np
 import numpy.linalg as LA
 import warnings
+
+from os.path import join
 
 # import matplotlib.pyplot as plt
 
@@ -42,8 +45,10 @@ DT_INPUT = 0.04 # make sure this is bigger than self.dt_pub
 # TODO -- regression algorithm
 
 class ReplayCallibration():
-    def __init__(self, setUp="", n_iteration_points=10, n_loops=-1):
+    def __init__(self, setUp="", n_loops=0):
+        # n_loops: negative number account result in infinite loops
         self.mutex = Lock()
+        rospack = rospkg.RosPack()
         rospy.init_node("talker_playBack", anonymous=True)
         
         self.pub_jointVel = rospy.Publisher("/ur5/ur_driver/joint_speed", JointTrajectory, queue_size=5)
@@ -59,12 +64,11 @@ class ReplayCallibration():
         self.dt_pub = 1./self.freq
         self.rate = rospy.Rate(self.freq)    # Frequency 10Hz
 
-        self.n_iteration_points = n_iteration_points
         self.n_loops = n_loops # number times the points are looped (-1==inf)
-        
 
         self.data_points = []
-        with open('../data/ridgeback_calibration_v2.json') as json_data:
+        # with open(join(rospack.get_path("robot_calibration"), "data", "ridgeback_calibration_v2.json")) as json_data:
+        with open(join(rospack.get_path("robot_calibration"), "data", "ur5_calibration.json")) as json_data:
             self.data_points = json.load(json_data)
 
         self.n_points=len(self.data_points) # maximum number of points
@@ -73,7 +77,7 @@ class ReplayCallibration():
 
     
     def run(self):
-        attr_margin = 0.01 # set margin
+        self.attr_margin = 0.1 # set margin
         self.time_attr = rospy.get_time()
         goal_attr_reached = False
         self.spline_factors = np.zeros((N_JOINTS, 4)) # spline 4 order
@@ -94,9 +98,9 @@ class ReplayCallibration():
         while not rospy.is_shutdown():
             # TODO update spline each loop to have flexible DS
             self.update_spline()
-            self.update_velocity(vel_limit=0.1)
+            self.update_velocity(vel_limit=0.2)
 
-            if self.get_distance_from_attractor() < attr_margin:
+            if self.check_if_attractor_reached:
                 print('Reached attractor #{} of {}'.format(self.it_attr, self.n_points))
                 if goal_attr_reached:
                     print('Movement is finished.')
@@ -198,7 +202,6 @@ class ReplayCallibration():
         msg_jointVel.points.append(newPoint)
         
         self.pub_jointVel.publish(msg_jointVel)
-
             
     def get_interpolated_velocity(self):
         dt = self.dt_pub
@@ -211,6 +214,16 @@ class ReplayCallibration():
         # TODO LIMIT maximum speed
         return vel
 
+    def check_if_attractor_reached(self):
+        if get_distance_from_attractor(self) < self.dist_attr:
+            return False
+        else:
+            return True
+
+        # Alternatively
+        self.started_at_lower_pos = np.copysign(np.ones(N_JOINTS), (self.pos_boundary[:,1]-self.joint_pos))         
+
+
     def get_distance_from_attractor(self):
         delta_pos =  self.pos_boundary[:, 1] - self.joint_pos
         return LA.norm((delta_pos))
@@ -220,22 +233,28 @@ class ReplayCallibration():
 
     def update_boundary_conditions(self):
         # return  (normal=0) -- (shutdown=1)
+        state_shutdown = False
         if (self.it_attr+1 >= self.n_points):
             if self.n_loops == 0:
                 print('Shutdown')
                 self.vel_boundary[:, 1] = np.zeros(N_JOINTS)
                 self.pos_boundary[:, 1] = self.pos_boundary[:, 0] 
-                return 1 # shutdown 
+                state_shutdown = True  # shutdown 
             else:
                 if self.n_loops > 0:
                     self.n_loops -= 1
                 self.it_attr = 0
 
-        if type(self.data_points[self.it_attr]) == dict:
-            self.pos_boundary[:, 1] = self.data_points[self.it_attr]['position'][:N_JOINTS]
-            self.vel_boundary[:, 1] = self.data_points[self.it_attr]['velocity'][:N_JOINTS]
-        return 0 # continue loops
+        if not state_shutdown:
+            if type(self.data_points[self.it_attr]) == dict:
+                self.pos_boundary[:, 1] = self.data_points[self.it_attr]['position'][:N_JOINTS]
+                self.vel_boundary[:, 1] = self.data_points[self.it_attr]['velocity'][:N_JOINTS]
 
+        # Check on which side of the new attractor the robot started
+        self.started_at_lower_pos = np.copysign(np.ones(N_JOINTS), (self.pos_boundary[:,1]-self.joint_pos)) 
+        # self.ind_non
+        
+        return state_shutdown # continue loops
 
     def callback_jointState(self, msg):
         with self.mutex:
