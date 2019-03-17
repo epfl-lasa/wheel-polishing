@@ -65,8 +65,10 @@ class ReplayCallibration_KUKA():
         self.n_loops = n_loops # number times the points are looped (-1==inf)
 
         self.data_points = []
+        self.pos_next = []
         # with open(join(rospack.get_path("wheel_polishing"), "data", "kuka_lwr_calibration.json")) as json_data:
-        with open(join(rospack.get_path("robot_calibration"), "data", "ridgeback_calibration_v2.json")) as json_data:
+        # with open(join(rospack.get_path("robot_calibration"), "data", "ridgeback_calibration_v2.json")) as json_data:
+        with open(join(rospack.get_path("robot_calibration"), "data", "lwr_calibration.json")) as json_data:
 
             self.data_points = json.load(json_data)
         # import pdb; pdb.set_trace()
@@ -115,8 +117,8 @@ class ReplayCallibration_KUKA():
             # TODO update spline each loop to have flexible DS
             # self.update_spline()
             # self.update_velocity(vel_limit=0.2)
-            self.update_boundary_conditions()
-            shutdown = self.update_position()
+            shutdown = self.update_boundary_conditions()
+            self.update_position()
 
             if shutdown:
                 self.shutdown_command()

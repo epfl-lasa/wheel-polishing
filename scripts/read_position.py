@@ -30,6 +30,8 @@ from numpy import pi
 import warnings
 from class_quaternion import *
 
+from recorder import Recorder
+
 # TODO - replace with other data structure
 controlModes = {"joint_pos":0,
                 "passive_ds":1,

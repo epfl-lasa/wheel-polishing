@@ -40,7 +40,8 @@ JOINT_NAMES = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
 
 
 # DT = 1./25 # fixed DT
-DT_INPUT = 0.04 # make sure this is bigger than self.dt_pub
+# TODO get frequency! at real time
+DT_INPUT = 0.02 # make sure this is bigger than self.dt_pub
 
 # TODO -- regression algorithm
 
@@ -60,7 +61,10 @@ class ReplayCallibration():
         # Initialize topics
         self.sub_joint_pos = rospy.Subscriber("/ur5/joint_states", JointState, self.callback_jointState)
 
-        self.freq = 50 # Warning - too high frequence leads to jerky behavior
+        # self.freq = 25 # Warning - too high frequence leads to jerky behavior
+        # self.freq = 125
+        self.freq = 95
+
         self.dt_pub = 1./self.freq
         self.rate = rospy.Rate(self.freq)    # Frequency 10Hz
 
@@ -92,24 +96,32 @@ class ReplayCallibration():
         self.pos_boundary = np.tile(self.joint_pos, (2,1)).T
         self.vel_boundary = np.zeros((N_JOINTS, 2))
         
-        self.it_attr = 0
+        self.it_attr = 300 # start high, because no movement at beginning
+        # self.it_attr = 8900 # start high, because no movement at beginning
+        self.attr_step = 5
         self.it_loop = 0
+
+        self.update_boundary_conditions()
 
         while not rospy.is_shutdown():
             # TODO update spline each loop to have flexible DS
             self.update_spline()
-            self.update_velocity(vel_limit=0.2)
+            self.update_velocity(vel_limit=0.25)
 
-            if self.check_if_attractor_reached:
+            if self.check_if_attractor_reached():
+                self.check_if_multiple_attractor_reached()
+    
                 print('Reached attractor #{} of {}'.format(self.it_attr, self.n_points))
                 if goal_attr_reached:
                     print('Movement is finished.')
                     break
                 
-                self.it_attr += 1
+                self.it_attr += self.attr_step
                 self.time_attr = rospy.get_time()
 
                 goal_attr_reached = self.update_boundary_conditions()
+            # else:
+                # print('Nothing reached loop')
                 
             self.it_loop += 1
 
@@ -128,12 +140,13 @@ class ReplayCallibration():
         # msg_jointVel.points.velocities = des_joint_vel.tolist()
 
         newPoint = JointTrajectoryPoint()
-        newPoint.newPoint.velocities = np.zeros(self.joint_pos).tolist()
-        newPoint.newPoint.velocities = np.zeros(N_JOINTS).tolist()
+        newPoint.positions = self.joint_pos.tolist()
+        newPoint.velocities = np.zeros(N_JOINTS).tolist()
         for ii in range(3): # repeat several times
             msg_jointVel.points.append(newPoint)
 
         self.pub_jointVel.publish(msg_jointVel)
+        print('Send zero velocity')
         
         rospy.signal_shutdown('User shutdown.')
         print('See you next time')
@@ -215,14 +228,31 @@ class ReplayCallibration():
         return vel
 
     def check_if_attractor_reached(self):
-        if get_distance_from_attractor(self) < self.dist_attr:
-            return False
-        else:
-            return True
+        # if get_distance_from_attractor(self) < self.dist_attr:
+            # return False
+        # else:
+            # return True
+
+        ind = ~self.attrReached
+        self.attrReached[ind] = self.pos_boundary[ind,1]*self.relativeStartingDir[ind]-self.attr_margin < self.joint_pos[ind]*self.relativeStartingDir[ind]
 
         # Alternatively
-        self.started_at_lower_pos = np.copysign(np.ones(N_JOINTS), (self.pos_boundary[:,1]-self.joint_pos))         
+        return all(self.attrReached)
 
+    def check_if_multiple_attractor_reached(self):
+        
+        while all(self.attrReached):
+            joint_pos_virt = np.array(self.data_points[self.it_attr]['position'][:N_JOINTS])
+            if self.it_attr+2*self.attr_step >= self.n_points:
+                break
+            pos_attr = np.array(self.data_points[self.it_attr + self.attr_step]['position'][:N_JOINTS])
+            self.relativeStartingDir = np.copysign(np.ones(N_JOINTS), (pos_attr-joint_pos_virt)) 
+            self.attrReached = pos_attr*self.relativeStartingDir-self.attr_margin < self.joint_pos*self.relativeStartingDir
+
+            # import pdb; pdb.set_trace()
+            if all(self.attrReached):
+                self.it_attr += self.attr_step
+            # print('attr', self.it_attr)
 
     def get_distance_from_attractor(self):
         delta_pos =  self.pos_boundary[:, 1] - self.joint_pos
@@ -233,8 +263,9 @@ class ReplayCallibration():
 
     def update_boundary_conditions(self):
         # return  (normal=0) -- (shutdown=1)
+        # print('attr 265', self.it_attr)
         state_shutdown = False
-        if (self.it_attr+1 >= self.n_points):
+        if (self.it_attr+self.attr_step >= self.n_points):
             if self.n_loops == 0:
                 print('Shutdown')
                 self.vel_boundary[:, 1] = np.zeros(N_JOINTS)
@@ -250,9 +281,10 @@ class ReplayCallibration():
                 self.pos_boundary[:, 1] = self.data_points[self.it_attr]['position'][:N_JOINTS]
                 self.vel_boundary[:, 1] = self.data_points[self.it_attr]['velocity'][:N_JOINTS]
 
+        # print(self.it_attr)
         # Check on which side of the new attractor the robot started
-        self.started_at_lower_pos = np.copysign(np.ones(N_JOINTS), (self.pos_boundary[:,1]-self.joint_pos)) 
-        # self.ind_non
+        self.relativeStartingDir = np.copysign(np.ones(N_JOINTS), (self.data_points[self.it_attr]['position'][:N_JOINTS]-self.joint_pos)) 
+        self.attrReached = np.zeros(N_JOINTS, dtype=bool)
         
         return state_shutdown # continue loops
 

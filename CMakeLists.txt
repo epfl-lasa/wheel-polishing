@@ -16,6 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   cartesian_state_msgs
   trajectory_msgs
+  robot_calibration
 )
 
 ## System dependencies are found with CMake's conventions
@@ -110,8 +111,15 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES wheel_polishing
-#  CATKIN_DEPENDS geometry_msgs roscpp rospy std_msgs
-#  DEPENDS system_lib
+ CATKIN_DEPENDS   geometry_msgs
+  roscpp
+  rospy
+  std_msgs	
+  nav_msgs
+  sensor_msgs
+  cartesian_state_msgs
+  trajectory_msgs 
+  #  DEPENDS system_lib
 )
 
 ###########
