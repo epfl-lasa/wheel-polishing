@@ -127,18 +127,16 @@ class MoveWheelTrajectory():
             rel_time_margin = 0.1
             if (new_time - self.old_time) > self.dt_pub*(1+rel_time_margin):
                 print('')
-                print('WARNING - slop update', new_time - self.old_time)
-                # import pdb; pdb.set_trace()
+                print('!!!WARNING!!! - slow updating rate...', new_time - self.old_time)
                 
             self.old_time = new_time
 
             # TODO update spline each loop to have flexible DS
             self.update_spline()
             self.update_velocity()
-            # self.publish_path_debugging()
 
             if self.check_if_attractor_reached():
-                # os.system('play -nq -t alsa synth 0.1 sine 550')
+
                 if goal_attr_reached:
                     print('Movement is finished.')
                     self.shutdown_command()
