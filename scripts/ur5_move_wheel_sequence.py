@@ -37,7 +37,7 @@ MODE_LIST = [
     # {"name":'leave_home', "n_loops":0, "time_to_execute":10, "move":True},
     {"name":'polish_n_chill', "n_loops":0, "time_to_execute":1, "move":False, "polishingMode":False},
     # {"name":'ur5_movement_1', "n_loops":0, "time_to_execute":20, "move":True, "polishingMode":True},
-    {"name":'ur5_position_sidewards', "n_loops":-5, "time_to_execute":20, "move":True, "polishingMode":True},
+    {"name":'ur5_position_sidewards', "n_loops":2, "time_to_execute":20, "move":True, "polishingMode":True},
     # {"name":'sidewards_motion', "n_loops":0, "time_to_execute":20, "move":True, "polishingMode":True},
     {"name":'polish_n_chill', "n_loops":1, "time_to_execute":10, "move":False, "polishingMode":True},
     # {"name":'tilt_towards_robot', "n_loops":2, "time_to_execute":20, "move":True, "polishingMode":True},
@@ -76,7 +76,7 @@ class MoveWheelTrajectory():
         # Too low frequence results in jerky behavior, to high frequency will results in delays
         # Acceptable frequency range: 60 - 85
         # self.freq = 125
-        self.freq = 90
+        self.freq = 80
         self.dt_pub = 1./self.freq
         self.rate = rospy.Rate(self.freq)    
 
@@ -332,7 +332,7 @@ class MoveWheelTrajectory():
                 # des_joint_vel = np.min(np.vstack((vel_limit/max_des_vel, np.ones(N_JOINTS))), axis=0)*des_joint_vel
         if self.moving and self.it_attr==0 and (rospy.get_time()-self.time_start_stage)<start_time:
             des_joint_vel *= ((rospy.get_time()-self.time_start_stage)/start_time)
-            print("send reduced velocity")
+            # print("send reduced velocity")
         self.des_joint_vel_debug = des_joint_vel
 
         # TODO - PID controller in "virtual velocity" -- ?

@@ -1,4 +1,67 @@
-s# wheel_polishing
+# wheel_polishing
+
+## Launch this simulation
+
+### Launch UR5 robot arm
+Go on UR5
+```
+ssh administrator@192.168.0.20
+'''
+PW: clearpath
+
+```
+roslaunch cpr_bringup cpr_bringup.launch sim:=false
+'''
+
+Next terminal, synchronize time. Check delay:
+```
+ntpdate -q 192.168.0.20
+'''
+
+Synchronize time:
+```
+ntpdate 192.168.0.20
+'''
+
+
+Launch KUKA
+```
+roslaunch lwr_simple_example real.launch
+'''
+Launch the file on the KUKA Controller. Launch FRI interface:
+```
+roslaunch lwr_fri lwr_fri_console.launch
+'''
+Type:
+```
+control
+'''
+
+Publish calibration between KUKA and UR5
+```
+roslaunch robot_calibration calibration_publishers.launch ci:=0
+'''
+Launch force torque sensors
+```
+roslaunch netft_rdt_driver ft_sensor.launch 
+'''
+
+Set DS controller paramters
+```
+rosrun rqt_reconfigure rqt_reconfigure 
+'''
+damping_eigval0:150, damping_eigval1:150, rot_stiffness:15, rot_damping:2, rot_integrator:0, smooth_val:0.001, debug:True, bSmooth:True, useNullSpace:True, jointLImitsGains:1.0, desiredJointsGain:0.0, jointVelocitiesGain:0.01  
+
+Launch KUKA controller
+```
+rosrun polishing_demo polishing_demo bou -v 0.2 -f 12 -an n
+'''
+
+Launch UR5 arm
+```
+rosrun wheel_polishing ur5_move_wheel_sequence.py 
+'''
+
 
 ## To launch the robot
 ```
