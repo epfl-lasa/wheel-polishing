@@ -142,6 +142,7 @@ class MoveWheelTrajectory():
                     print('Finished stage {} of {}.'.format(self.it_stage, len(MODE_LIST)+1) )
                     self.it_stage += 1
                     if self.it_stage >= len(MODE_LIST):
+                        self.it_stage = 0
                         if self.global_loop < 0:
                             print("Manymany of demonstrations left.")
                         elif self.global_loop < 0:
@@ -150,6 +151,7 @@ class MoveWheelTrajectory():
                         elif self.global_loop == 0:
                             self.shutdown_command()
                             break
+                    self.it_stage = 0
                     self.define_trajectory_points(MODE_LIST[self.it_stage])
                     # continue
                 elif not self.goal_attr_reached:
