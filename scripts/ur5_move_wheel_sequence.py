@@ -37,7 +37,7 @@ MODE_LIST = [
     # {"name":'leave_home', "n_loops":0, "time_to_execute":10, "move":True},
     {"name":'polish_n_chill', "n_loops":0, "time_to_execute":1, "move":False, "polishingMode":False},
     # {"name":'ur5_movement_1', "n_loops":0, "time_to_execute":20, "move":True, "polishingMode":True},
-    {"name":'ur5_position_sidewards', "n_loops":3, "time_to_execute":20, "move":True, "polishingMode":True},
+    {"name":'ur5_position_sidewards', "n_loops":-5, "time_to_execute":20, "move":True, "polishingMode":True},
     # {"name":'sidewards_motion', "n_loops":0, "time_to_execute":20, "move":True, "polishingMode":True},
     {"name":'polish_n_chill', "n_loops":1, "time_to_execute":10, "move":False, "polishingMode":True},
     # {"name":'tilt_towards_robot', "n_loops":2, "time_to_execute":20, "move":True, "polishingMode":True},
@@ -76,7 +76,7 @@ class MoveWheelTrajectory():
         # Too low frequence results in jerky behavior, to high frequency will results in delays
         # Acceptable frequency range: 60 - 85
         # self.freq = 125
-        self.freq = 70
+        self.freq = 90
         self.dt_pub = 1./self.freq
         self.rate = rospy.Rate(self.freq)    
 
@@ -151,7 +151,6 @@ class MoveWheelTrajectory():
                         elif self.global_loop == 0:
                             self.shutdown_command()
                             break
-                    self.it_stage = 0
                     self.define_trajectory_points(MODE_LIST[self.it_stage])
                     # continue
                 elif not self.goal_attr_reached:
@@ -276,7 +275,7 @@ class MoveWheelTrajectory():
             msg_jointVel.points.append(newPoint)
 
         self.pub_jointVel.publish(msg_jointVel)
-        print('Send zero velocity')
+        # print('Send zero velocity')
 
         rospy.signal_shutdown('User shutdown.')
         print('Thank you master. I hope to see you soon.')
@@ -406,7 +405,8 @@ class MoveWheelTrajectory():
         # newPoint.velocities = np.zeros(N_JOINTS).tolist()
         # newPoint.velocities[5] = 0.01 # For testing
         
-        msg_jointVel.points.append(newPoint)
+        for ii in range(3): # append several times
+            msg_jointVel.points.append(newPoint)
         
         self.pub_jointVel.publish(msg_jointVel)
             
