@@ -57,7 +57,7 @@ controlModes = {"joint_pos" : 0,
                 "stay_polishing" : 7 # Stay with ee-vel
 }
 
-n_joints = 6
+N_JOINTS = 6
 
 
 
@@ -291,9 +291,9 @@ class MoveWheel():
 
     def callback_jointState(self, msg):
         with self.mutex:
-            self.joint_pos = np.array(msg.position[:n_joints])
-            self.joint_vel = msg.velocity[:n_joints]
-            self.joint_torque = msg.effort[:n_joints]
+            self.joint_pos = np.array(msg.position[:N_JOINTS])
+            self.joint_vel = msg.velocity[:N_JOINTS]
+            self.joint_torque = msg.effort[:N_JOINTS]
 
             if not self.recieved_jointState_msg:
                 self.recieved_jointState_msg = True
