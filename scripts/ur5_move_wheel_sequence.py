@@ -1,4 +1,5 @@
 #!/usr/bin/env python2
+
 '''
 Movement of the wheel fro the r5
 
@@ -12,6 +13,7 @@ from sensor_msgs.msg import JointState
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from geometry_msgs.msg import TwistStamped, Twist, Pose, PoseStamped, Quaternion, Point, PointStamped
 from nav_msgs.msg import Path
+from std_msgs.msg import Bool
 
 import numpy as np
 import numpy.linalg as LA
@@ -29,19 +31,26 @@ N_JOINTS = 6 # == DIM
 JOINT_NAMES = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
                'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
 
+
 # TODO (MAYBE change to dict of list, more efficietn)
-MODE_LIST = [{"name":'leave_home', "n_loops":0, "time_to_execute":10, "move":True},
-             {"name":'polish_n_chill', "n_loops":0, "time_to_execute":10, "move":False},
-             {"name":'sidewards_motion', "n_loops":0, "time_to_execute":20, "move":True},
-             {"name":'polish_n_chill', "n_loops":0, "time_to_execute":3, "move":False},
-             {"name":'tilt_towards_robot', "n_loops":0, "time_to_execute":20, "move":True},
-             {"name":'polish_n_chill', "n_loops":0, "time_to_execute":3, "move":False},
-             {"name":'go_home', "n_loops":0, "time_to_execute":10, "move":True},
-             {"name":'chill_home', "n_loops":0, "time_to_execute":5, "move":False}]
+MODE_LIST = [
+    # {"name":'leave_home', "n_loops":0, "time_to_execute":10, "move":True},
+    {"name":'polish_n_chill', "n_loops":0, "time_to_execute":1, "move":False, "polishingMode":False},
+    # {"name":'ur5_movement_1', "n_loops":0, "time_to_execute":20, "move":True, "polishingMode":True},
+    {"name":'ur5_position_sidewards', "n_loops":3, "time_to_execute":20, "move":True, "polishingMode":True},
+    # {"name":'sidewards_motion', "n_loops":0, "time_to_execute":20, "move":True, "polishingMode":True},
+    {"name":'polish_n_chill', "n_loops":1, "time_to_execute":10, "move":False, "polishingMode":True},
+    # {"name":'tilt_towards_robot', "n_loops":2, "time_to_execute":20, "move":True, "polishingMode":True},
+    # {"name":'polish_n_chill', "n_loops":0, "time_to_execute":3, "move":False, "polishingMode":True},
+    # {"name":'go_home', "n_loops":0, "time_to_execute":10, "move":True, "polishingMode":False},
+    # {"name":'chill_home', "n_loops":0, "time_to_execute":5, "move":False, "polishingMode":False},
+    # {"name":'polish_n_chill', "n_loops":0, "time_to_execute":10, "move":False, "polishingMode":False},
+    # {"name":'polish_n_chill', "n_loops":0, "time_to_execute":10, "move":False, "polishingMode":False}
+]
 
 
 class MoveWheelTrajectory():
-    def __init__(self, setUp="", global_loop=1, smoothen_velocity=True, time_between_point=1, debuggingMode=False):
+    def __init__(self, vel_limit_max=0.05, setUp="", global_loop=-1, smoothen_velocity=True, time_between_point=1, debuggingMode=False):
         # n_loops: negative number account result in infinite loops
         self.mutex = Lock()
         self.rospack = rospkg.RosPack()
@@ -49,7 +58,10 @@ class MoveWheelTrajectory():
         rospy.init_node("talker_playBack", anonymous=True)
         self.time_start = rospy.get_time()
         
-        self.pub_jointVel = rospy.Publisher("/ur5/ur_driver/joint_speed", JointTrajectory, queue_size=5)
+        self.pub_jointVel = rospy.Publisher("/ur5/ur_driver/joint_speed", JointTrajectory, queue_size=1)
+
+        self.pub_polishingMode = rospy.Publisher("/ur5/polishing_mode", Bool, queue_size=5)
+
         if debuggingMode:
             self.pub_jointTraj = rospy.Publisher("/debugging/joint_trajectory", Path, queue_size=5)
             self.pub_jointTraj2 = rospy.Publisher("/debugging/joint_trajectory2", Path, queue_size=5)
@@ -63,6 +75,7 @@ class MoveWheelTrajectory():
         # WARNING - too high frequence leads to jerky behavior
         # Too low frequence results in jerky behavior, to high frequency will results in delays
         # Acceptable frequency range: 60 - 85
+        # self.freq = 125
         self.freq = 70
         self.dt_pub = 1./self.freq
         self.rate = rospy.Rate(self.freq)    
@@ -70,6 +83,8 @@ class MoveWheelTrajectory():
         self.global_loop = global_loop # number times the simulation is looped (-1==inf)
         self.smoothen_velocity = smoothen_velocity 
         self.time_between_point = time_between_point
+
+        self.vel_limit_max = vel_limit_max
 
         print('Node initialized')
 
@@ -101,14 +116,16 @@ class MoveWheelTrajectory():
         self.it_stage = 0
         self.define_trajectory_points(MODE_LIST[self.it_stage])
         atrractor_mupltiple = 5
-        if LA.norm((np.array(self.data_points[0]["position"])) - self.joint_pos) > self.attr_margin*atrractor_mupltiple:
-            self.it_stage -= 2
-            self.define_trajectory_points(MODE_LIST[self.it_stage])
+        # if LA.norm((np.array(self.data_points[0]["position"])) - self.joint_pos) > self.attr_margin*atrractor_mupltiple:
+            # self.it_stage -= 2
+            # self.define_trajectory_points(MODE_LIST[self.it_stage])
         
         self.goal_attr_reached = False
         self.it_count = 0
 
         self.old_time = rospy.get_time()
+        self.isInpolishingMode = False
+
         while not rospy.is_shutdown():
             new_time = rospy.get_time()
             rel_time_margin = 0.1
@@ -118,14 +135,21 @@ class MoveWheelTrajectory():
 
             self.update_spline()
             self.update_velocity()
+            self.update_polishMode()
 
             if self.check_if_attractor_reached():
                 if self.goal_attr_reached and (self.moving or (rospy.get_time()-self.time_start_stage)>self.time_between_point):
-                    print('Stage {} is finished.'.format(self.it_stage))
+                    print('Finished stage {} of {}.'.format(self.it_stage, len(MODE_LIST)+1) )
                     self.it_stage += 1
                     if self.it_stage >= len(MODE_LIST):
-                        self.shutdown_command()
-                        break
+                        if self.global_loop < 0:
+                            print("Manymany of demonstrations left.")
+                        elif self.global_loop < 0:
+                            self.global_loop -= 1
+                            print("Number of demonstrations left {}".format(self.global_loop) )
+                        elif self.global_loop == 0:
+                            self.shutdown_command()
+                            break
                     self.define_trajectory_points(MODE_LIST[self.it_stage])
                     # continue
                 elif not self.goal_attr_reached:
@@ -232,7 +256,11 @@ class MoveWheelTrajectory():
     
     def shutdown_command(self, signal=0, frame=0):
         # Catches Ctrl-c
-        print('Shuting down....')
+        print('Shutting down....')
+
+        self.isInPolishingMode = False
+        self.update_polishMode()
+        print('Stop polishing.')
 
         msg_jointVel = JointTrajectory()
         msg_jointVel.header.stamp = rospy.Time.now()
@@ -247,9 +275,9 @@ class MoveWheelTrajectory():
 
         self.pub_jointVel.publish(msg_jointVel)
         print('Send zero velocity')
-        
+
         rospy.signal_shutdown('User shutdown.')
-        print('See you next time')
+        print('Thank you master. I hope to see you soon.')
         
     def update_spline(self):
         # Create a curve  of the form spline approximation ORDER == 4
@@ -274,7 +302,10 @@ class MoveWheelTrajectory():
             self.spline_factors[ii,2] = c_vect[0]
             self.spline_factors[ii,3] = c_vect[1]
 
-    def update_velocity(self, vel_limit=0.2, acc_fac=1.0, slow_down_time=0.1, uniform_scaling=True, start_time=0.4):
+    def update_polishMode(self):
+        self.pub_polishingMode.publish(Bool(self.isInpolishingMode))
+
+    def update_velocity(self, vel_limit=0.1, acc_fac=1.0, slow_down_time=0.1, uniform_scaling=True, start_time=0.4):
         des_joint_vel = self.get_interpolated_velocity()
 
         # print('self.joint_pos', 'joint_pos1', 'joint_pos1')
@@ -490,6 +521,17 @@ class MoveWheelTrajectory():
             with open(join(self.rospack.get_path("wheel_polishing"), "data", "ur5_position_polishing.json")) as json_data:
                 self.data_points.append(json.load(json_data)[0])
 
+        elif mode["name"]=="ur5_movement_1":
+            with open(join(self.rospack.get_path("wheel_polishing"), "data", "ur5_movement_1.json")) as json_data:
+                self.data_points = json.load(json_data)
+
+        elif mode["name"]=="ur5_position_sidewards":
+            with open(join(self.rospack.get_path("wheel_polishing"), "data", "ur5_position_sidewards"+".json")) as json_data:
+                self.data_points = json.load(json_data)
+            with open(join(self.rospack.get_path("wheel_polishing"), "data", "ur5_position_polishing.json")) as json_data:
+                self.data_points.append(json.load(json_data)[0])
+
+
         elif mode["name"]=="polish_n_chill":
             with open(join(self.rospack.get_path("wheel_polishing"), "data", "ur5_position_polishing.json")) as json_data:
                 self.data_points = json.load(json_data)
@@ -507,6 +549,7 @@ class MoveWheelTrajectory():
         self.n_loops = mode["n_loops"]
         self.time_between_point = mode["time_to_execute"]/(len(self.data_points)-1)
         self.moving = mode["move"]
+        self.isInpolishingMode = mode["polishingMode"]
 
         self.n_points=len(self.data_points) # maximum number of points
 
@@ -550,8 +593,11 @@ class MoveWheelTrajectory():
 
 if __name__ == '__main__':
     try:
-        print('Input argmunt', sys.argv)
-        MoveWheelTrajectory_instance = MoveWheelTrajectory('conveyerBelt_basket')
+        # if len(sys.argv == 1)
+        # print('Input argmunts {}'.format(sys.argv[1:]))
+        # if 
+        
+        MoveWheelTrajectory_instance = MoveWheelTrajectory()
         signal.signal(signal.SIGINT, MoveWheelTrajectory_instance.shutdown_command)
 
         if not rospy.is_shutdown():

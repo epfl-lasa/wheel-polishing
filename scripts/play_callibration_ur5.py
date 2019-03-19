@@ -106,7 +106,7 @@ class ReplayCallibration():
         while not rospy.is_shutdown():
             # TODO update spline each loop to have flexible DS
             self.update_spline()
-            self.update_velocity(vel_limit=0.25)
+            self.update_velocity(vel_limit=0.1)
 
             if self.check_if_attractor_reached():
                 self.check_if_multiple_attractor_reached()
@@ -178,7 +178,7 @@ class ReplayCallibration():
         des_joint_vel = self.get_interpolated_velocity()
 
         max_des_vel = np.max(np.abs(des_joint_vel)) 
-        des_joint_vel = np.min([vel_limit/max_des_vel, max_des_vel])*des_joint_vel
+        des_joint_vel = np.min([vel_limit/max_des_vel, 1])*des_joint_vel
 
         # Create message
         msg_jointVel = JointTrajectory()

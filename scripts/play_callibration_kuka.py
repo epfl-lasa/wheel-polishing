@@ -12,7 +12,7 @@ import rospkg
 from sensor_msgs.msg import JointState
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from geometry_msgs.msg import TwistStamped, Twist, Pose, PoseStamped
-from std_msgs.msg import Float64MultiArray
+from std_msgs.msg import Float64MultiArray, Bool
 
 import numpy as np
 import numpy.linalg as LA
@@ -52,6 +52,7 @@ class ReplayCallibration_KUKA():
         rospy.init_node("talker_playBack", anonymous=True)
         
         self.pub_jointPos = rospy.Publisher("/lwr/joint_controllers/command_joint_pos", Float64MultiArray, queue_size=5)
+        self.pub_gravComp = rospy.Publisher("/lwr/joint_controllers/command_grav", Bool, queue_size=5)
 
         self.recieved_jointState_msg = False
 
@@ -149,6 +150,8 @@ class ReplayCallibration_KUKA():
             msg_jointVel.points.append(newPoint)
 
         self.pub_jointVel.publish(msg_jointVel)
+
+        self.pub_gravComp.publish(Bool(true))
         
         rospy.signal_shutdown('User shutdown.')
         print('See you next time')
