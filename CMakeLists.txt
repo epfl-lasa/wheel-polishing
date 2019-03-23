@@ -17,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
   cartesian_state_msgs
   trajectory_msgs
   robot_calibration
+  visualization_msgs  
 )
 
 ## System dependencies are found with CMake's conventions

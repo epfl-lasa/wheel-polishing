@@ -35,11 +35,11 @@ JOINT_NAMES = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
 # TODO (MAYBE change to dict of list, more efficietn)
 MODE_LIST = [
     # {"name":'leave_home', "n_loops":0, "time_to_execute":10, "move":True},
-    {"name":'polish_n_chill', "n_loops":0, "time_to_execute":0.1, "move":False, "polishingMode":False},
+    {"name":'polish_n_chill', "n_loops":0, "time_to_execute":1, "move":False, "polishingMode":False},
     # {"name":'ur5_movement_1', "n_loops":0, "time_to_execute":20, "move":True, "polishingMode":True},
     {"name":'ur5_position_sidewards', "n_loops":2, "time_to_execute":20, "move":True, "polishingMode":True},
     # {"name":'sidewards_motion', "n_loops":0, "time_to_execute":20, "move":True, "polishingMode":True},
-    {"name":'polish_n_chill', "n_loops":1, "time_to_execute":0.1, "move":False, "polishingMode":True},
+    {"name":'polish_n_chill', "n_loops":1, "time_to_execute":10, "move":False, "polishingMode":True},
     # {"name":'tilt_towards_robot', "n_loops":2, "time_to_execute":20, "move":True, "polishingMode":True},
     # {"name":'polish_n_chill', "n_loops":0, "time_to_execute":3, "move":False, "polishingMode":True},
     # {"name":'go_home', "n_loops":0, "time_to_execute":10, "move":True, "polishingMode":False},
@@ -76,7 +76,7 @@ class MoveWheelTrajectory():
         # Too low frequence results in jerky behavior, to high frequency will results in delays
         # Acceptable frequency range: 60 - 85
         # self.freq = 125
-        self.freq = 80
+        self.freq = 70
         self.dt_pub = 1./self.freq
         self.rate = rospy.Rate(self.freq)    
 
@@ -90,7 +90,7 @@ class MoveWheelTrajectory():
 
     
     def run(self):
-        self.attr_margin = 0.2 # set margin
+        self.attr_margin = 0.1 # set margin
         self.arriving_time_attr = rospy.get_time() + self.time_between_point
         goal_attr_reached = False
         self.spline_factors = np.zeros((N_JOINTS, 4)) # spline 4 order
@@ -139,7 +139,7 @@ class MoveWheelTrajectory():
 
             if self.check_if_attractor_reached():
                 if self.goal_attr_reached and (self.moving or (rospy.get_time()-self.time_start_stage)>self.time_between_point):
-                    print('Finished stage {} of {}.'.format(self.it_stage, len(MODE_LIST)+1) )
+                    print('Finished stage {} of {}.'.format(self.it_stage, len(MODE_LIST)) )
                     self.it_stage += 1
                     if self.it_stage >= len(MODE_LIST):
                         self.it_stage = 0
@@ -308,36 +308,35 @@ class MoveWheelTrajectory():
 
     def update_velocity(self, vel_limit=0.1, acc_fac=1.0, slow_down_time=0.1, uniform_scaling=True, start_time=0.4):
         # des_joint_vel = self.get_interpolated_velocity()
+
+        # LINEAR SYSTEM
         des_joint_vel = self.pos_boundary[:, 1] - self.joint_pos
+        
+        # des_joint_vel = np.array()
 
         # print('self.joint_pos', 'joint_pos1', 'joint_pos1')
         # print(np.vstack((self.joint_pos[:dd], self.pos_boundary[:dd].T)).T)
 
         max_des_vel = np.abs(des_joint_vel)
-        des_joint_vel = des_joint_vel /np.max(max_des_vel)*vel_limit
-        
-        # des_joint_vel = np.zeros(N_JOINTS)
         # print('max vel', np.max(np.abs(des_joint_vel)) )
         # print('ratio vel', np.min([vel_limit/max_des_vel, 1]) )
 
         # des_joint_vel_init = des_joint_vel*1.0
+        des_joint_vel = des_joint_vel*np.abs(max_des_vel)*vel_limit
+
         
         # if any(vel_limit/max_des_vel < 1):
-            # print("reducing vel max")
             # if (self.arriving_time_attr - rospy.get_time()) < slow_down_time:
                 # self.arriving_time_attr = slow_down_time + rospy.get_time()
             # else:
                 # self.arriving_time_attr += self.dt_pub
-            
-            # if uniform_scaling:
             # des_joint_vel = vel_limit/np.max(max_des_vel)*des_joint_vel
-            # else:
-                # import pdb; pdb.set_trace()
-                # des_joint_vel = np.min(np.vstack((vel_limit/max_des_vel, np.ones(N_JOINTS))), axis=0)*des_joint_vel
         # if self.moving and self.it_attr==0 and (rospy.get_time()-self.time_start_stage)<start_time:
             # des_joint_vel *= ((rospy.get_time()-self.time_start_stage)/start_time)
             # print("send reduced velocity")
         # self.des_joint_vel_debug = des_joint_vel
+
+
 
         # TODO - PID controller in "virtual velocity" -- ?
 

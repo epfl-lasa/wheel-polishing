@@ -32,7 +32,7 @@ Launch the file on the KUKA Controller. Launch FRI interface:
 ```
 roslaunch lwr_fri lwr_fri_console.launch
 '''
-Type:
+Type on the same terminal
 ```
 control
 '''
