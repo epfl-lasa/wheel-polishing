@@ -33,13 +33,13 @@ JOINT_NAMES = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
 
 
 # TODO (MAYBE change to dict of list, more efficietn)
-MODE_MOVEMENT = [
+MODE_LIST = [
     # {"name":'leave_home', "n_loops":0, "time_to_execute":10, "move":True},
-    {"name":'polish_n_chill', "n_loops":0, "time_to_execute":0.1, "move":False, "polishingMode":False},
-    {"name":'sidewards_motion', "n_loops":0, "time_to_execute":20, "move":True, "polishingMode":True},
-    {"name":'polish_n_chill', "n_loops":0, "time_to_execute":0.1, "move":False, "polishingMode":False}
+    {"name":'polish_n_chill', "n_loops":0, "time_to_execute":1, "move":False, "polishingMode":False},
     # {"name":'ur5_movement_1', "n_loops":0, "time_to_execute":20, "move":True, "polishingMode":True},
+    {"name":'ur5_position_sidewards', "n_loops":2, "time_to_execute":20, "move":True, "polishingMode":True},
     # {"name":'sidewards_motion', "n_loops":0, "time_to_execute":20, "move":True, "polishingMode":True},
+    {"name":'polish_n_chill', "n_loops":1, "time_to_execute":10, "move":False, "polishingMode":True},
     # {"name":'tilt_towards_robot', "n_loops":2, "time_to_execute":20, "move":True, "polishingMode":True},
     # {"name":'polish_n_chill', "n_loops":0, "time_to_execute":3, "move":False, "polishingMode":True},
     # {"name":'go_home', "n_loops":0, "time_to_execute":10, "move":True, "polishingMode":False},
@@ -48,20 +48,9 @@ MODE_MOVEMENT = [
     # {"name":'polish_n_chill', "n_loops":0, "time_to_execute":10, "move":False, "polishingMode":False}
 ]
 
-MODE_EXIT_HOME = [
-    {"name":'polish_n_chill', "n_loops":0, "time_to_execute":0.1, "move":False, "polishingMode":False},
-    {"name":'polish_n_chill', "n_loops":0, "time_to_execute":0.1, "move":False, "polishingMode":False}
-]
-
-MODE_GO_HOME = [
-    {"name":'chill_home', "n_loops":0, "time_to_execute":10, "move":True, "polishingMode":True},
-    {"name":'chill_home', "n_loops":0, "time_to_execute":10, "move":True, "polishingMode":True}
-]
-
-MODE_LIST = []
 
 class MoveWheelTrajectory():
-    def __init__(self, vel_limit_max=0.7, setUp="", global_loop=-1, smoothen_velocity=True, time_between_point=1, debuggingMode=False):
+    def __init__(self, vel_limit_max=0.05, setUp="", global_loop=-1, smoothen_velocity=True, time_between_point=1, debuggingMode=False):
         # n_loops: negative number account result in infinite loops
         self.mutex = Lock()
         self.rospack = rospkg.RosPack()
@@ -87,7 +76,7 @@ class MoveWheelTrajectory():
         # Too low frequence results in jerky behavior, to high frequency will results in delays
         # Acceptable frequency range: 60 - 85
         # self.freq = 125
-        self.freq = 80
+        self.freq = 70
         self.dt_pub = 1./self.freq
         self.rate = rospy.Rate(self.freq)    
 
@@ -101,7 +90,7 @@ class MoveWheelTrajectory():
 
     
     def run(self):
-        self.attr_margin = 0.2 # set margin
+        self.attr_margin = 0.1 # set margin
         self.arriving_time_attr = rospy.get_time() + self.time_between_point
         goal_attr_reached = False
         self.spline_factors = np.zeros((N_JOINTS, 4)) # spline 4 order
@@ -145,7 +134,7 @@ class MoveWheelTrajectory():
             self.old_time = new_time
 
             self.update_spline()
-            self.update_velocity(vel_limit = self.vel_limit_max)
+            self.update_velocity()
             self.update_polishMode()
 
             if self.check_if_attractor_reached():
@@ -317,38 +306,37 @@ class MoveWheelTrajectory():
     def update_polishMode(self):
         self.pub_polishingMode.publish(Bool(self.isInpolishingMode))
 
-    def update_velocity(self, vel_limit=0.3, acc_fac=1.0, slow_down_time=0.1, uniform_scaling=True, start_time=0.4):
+    def update_velocity(self, vel_limit=0.1, acc_fac=1.0, slow_down_time=0.1, uniform_scaling=True, start_time=0.4):
         # des_joint_vel = self.get_interpolated_velocity()
-        des_joint_vel = self.get_linear_velocity()
+
+        # LINEAR SYSTEM
+        des_joint_vel = self.pos_boundary[:, 1] - self.joint_pos
+        
+        # des_joint_vel = np.array()
 
         # print('self.joint_pos', 'joint_pos1', 'joint_pos1')
         # print(np.vstack((self.joint_pos[:dd], self.pos_boundary[:dd].T)).T)
 
         max_des_vel = np.abs(des_joint_vel)
-        # des_joint_vel = des_joint_vel /np.max(max_des_vel)*vel_limit
-        
-        # des_joint_vel = np.zeros(N_JOINTS)
         # print('max vel', np.max(np.abs(des_joint_vel)) )
         # print('ratio vel', np.min([vel_limit/max_des_vel, 1]) )
 
         # des_joint_vel_init = des_joint_vel*1.0
+        des_joint_vel = des_joint_vel*np.abs(max_des_vel)*vel_limit
+
         
-        if any(vel_limit/max_des_vel < 1):
-            print("reducing vel max")
-            if (self.arriving_time_attr - rospy.get_time()) < slow_down_time:
-                self.arriving_time_attr = slow_down_time + rospy.get_time()
-            else:
-                self.arriving_time_attr += self.dt_pub
-            
-            if uniform_scaling:
-                des_joint_vel = vel_limit/np.max(max_des_vel)*des_joint_vel
-            else:
-                # import pdb; pdb.set_trace()
-                des_joint_vel = np.min(np.vstack((vel_limit/max_des_vel, np.ones(N_JOINTS))), axis=0)*des_joint_vel
-        if self.moving and self.it_attr==0 and (rospy.get_time()-self.time_start_stage)<start_time:
-            des_joint_vel *= ((rospy.get_time()-self.time_start_stage)/start_time)
-            print("send reduced velocity")
-        self.des_joint_vel_debug = des_joint_vel
+        # if any(vel_limit/max_des_vel < 1):
+            # if (self.arriving_time_attr - rospy.get_time()) < slow_down_time:
+                # self.arriving_time_attr = slow_down_time + rospy.get_time()
+            # else:
+                # self.arriving_time_attr += self.dt_pub
+            # des_joint_vel = vel_limit/np.max(max_des_vel)*des_joint_vel
+        # if self.moving and self.it_attr==0 and (rospy.get_time()-self.time_start_stage)<start_time:
+            # des_joint_vel *= ((rospy.get_time()-self.time_start_stage)/start_time)
+            # print("send reduced velocity")
+        # self.des_joint_vel_debug = des_joint_vel
+
+
 
         # TODO - PID controller in "virtual velocity" -- ?
 
@@ -425,9 +413,6 @@ class MoveWheelTrajectory():
         
         self.pub_jointVel.publish(msg_jointVel)
             
-    def get_linear_velocity(self, vel_fac=0.1):
-        return (self.pos_boundary[:, 1] - self.joint_pos)*vel_fac
-        
     def get_interpolated_velocity(self):
         # NOTE - We don't take the derivative directly, but estimate the velocity it takes to get to the next position
         dt = self.dt_pub
@@ -528,32 +513,36 @@ class MoveWheelTrajectory():
                 self.data_points = self.data_points + data + data[-2::-1]
 
         elif mode["name"]=="sidewards_motion":
-            # with open(join(self.rospack.get_path("wheel_polishing"), "data", "ur5_sidewards_movement.json")) as json_data:
-                # self.data_points = json.load(json_data)
+            with open(join(self.rospack.get_path("wheel_polishing"), "data", "ur5_sidewards_movement.json")) as json_data:
+                self.data_points = json.load(json_data)
 
             # Replace last recording because it was bad
-            # with open(join(self.rospack.get_path("wheel_polishing"), "data", "ur5_sidewards_last_point.json")) as json_data:
-                # self.data_points[-1] = json.load(json_data)[0]
+            with open(join(self.rospack.get_path("wheel_polishing"), "data", "ur5_sidewards_last_point.json")) as json_data:
+                self.data_points[-1] = json.load(json_data)[0]
 
             # Last point needed for placement
-            with open(join(self.rospack.get_path("wheel_polishing"), "data", "ur5_sidewards_motion.json")) as json_data:
-                self.data_points = json.load(json_data)
-            with open(join(self.rospack.get_path("wheel_polishing"), "data", "ur5_polish_position.json")) as json_data:
+            with open(join(self.rospack.get_path("wheel_polishing"), "data", "ur5_sidewards_last_point.json")) as json_data:
+                self.data_points[-1] = json.load(json_data)[0]
+            with open(join(self.rospack.get_path("wheel_polishing"), "data", "ur5_position_polishing.json")) as json_data:
                 self.data_points.append(json.load(json_data)[0])
 
         elif mode["name"]=="ur5_movement_1":
             with open(join(self.rospack.get_path("wheel_polishing"), "data", "ur5_movement_1.json")) as json_data:
                 self.data_points = json.load(json_data)
 
-        elif mode["name"]=="ur5_position_indDays":
+        elif mode["name"]=="ur5_position_sidewards":
+            # with open(join(self.rospack.get_path("wheel_polishing"), "data", "ur5_position_sidewards"+".json")) as json_data:
+                # self.data_points = json.load(json_data)
+            # with open(join(self.rospack.get_path("wheel_polishing"), "data", "ur5_position_polishing.json")) as json_data:
+                # self.data_points.append(json.load(json_data)[0])
             with open(join(self.rospack.get_path("wheel_polishing"), "data", "indDays_movement"+".json")) as json_data:
                 self.data_points = json.load(json_data)
             with open(join(self.rospack.get_path("wheel_polishing"), "data", "indDay_home_position.json")) as json_data:
                 self.data_points.append(json.load(json_data)[0])
 
+
         elif mode["name"]=="polish_n_chill":
-            # with open(join(self.rospack.get_path("wheel_polishing"), "data", "indDay_home_position.json")) as json_data:
-            with open(join(self.rospack.get_path("wheel_polishing"), "data", "ur5_polish_position"+".json")) as json_data:
+            with open(join(self.rospack.get_path("wheel_polishing"), "data", "indDay_home_position.json")) as json_data:
                 self.data_points = json.load(json_data)
             self.data_points *= 2
 
@@ -600,7 +589,7 @@ class MoveWheelTrajectory():
             # TODO apply transform to np.array only when used
             joint_pos_new = np.array(msg.position[:N_JOINTS])
             joint_vel_new = np.array(msg.velocity[:N_JOINTS])
-            joint_acc_new = np.array(msg.effort[:N_JOINTS])  # including weight!? - create automated gravity compensation mode
+            joint_acc_new = np.array(msg.effort[:N_JOINTS]) # including weight!? - create automated gravity compensation mode
 
             # Simplified kalman filter. Improve?
             self.joint_acc = (1-k_acc)*self.joint_acc + k_acc*joint_acc_new
@@ -613,35 +602,10 @@ class MoveWheelTrajectory():
 
 if __name__ == '__main__':
     try:
-        # if len(sys.argv == 1):
-        print('Input argmunts {}'.format(sys.argv[1:]))
-
-        if len(sys.argv) > 1:
-            argv = sys.argv[1:]
-            print([type(argv[i])==str for i in range(len(argv))])
-            if any ([type(argv[i])==str for i in range(len(argv))]):
-                if argv[0]=="EXIT":
-                    print("Mode is STOP")
-                    MODE_LIST = MODE_GO_HOME
-                elif argv[0]=="INIT":
-                    print("Mode is INIT")
-                    MODE_LIST = MODE_EXIT_HOME
-                elif argv[0]=="MOVE":
-                    print("Mode is MOVE")
-                    MODE_LIST = MODE_MOVEMENT
-                else:
-                    print("WARNING -- Unkonw Mode Name")
-                    print("Default <<Run>> mode is chosen")
-                    MODE_LIST = MODE_MOVEMENT
-                    rospy.sleep(1)
-            
-        else:
-            print("Possible run arguments are <<RUN>> <<INIT>> <<STOP>>")
-            print("Default <<RUN>> is chosen.")
-            MODE_LIST = MODE_MOVEMENT
-            rospy.sleep(1)
+        # if len(sys.argv == 1)
+        # print('Input argmunts {}'.format(sys.argv[1:]))
+        # if 
         
-        print(MODE_LIST)
         MoveWheelTrajectory_instance = MoveWheelTrajectory()
         signal.signal(signal.SIGINT, MoveWheelTrajectory_instance.shutdown_command)
 

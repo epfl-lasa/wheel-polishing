@@ -1,0 +1,99 @@
+#!/usr/bin/env python2
+
+'''
+Class to visualize additional tools based on simple geometrical objtects.
+TODO: Create more sophisticated models.
+
+@author Lukas Huber
+@date 2019-03-22
+
+'''
+
+import rospy
+import rospkg
+
+import numpy as np
+import numpy.linalg as LA
+
+from geometry_msgs.msg import Point, Quaternion, Vector3
+from visualization_msgs.msg import MarkerArray, Marker
+from std_msgs.msg import ColorRGBA
+
+import numpy as np
+import numpy.linalg as LA
+
+# print("I will define everything for you")
+
+class ShowTools():
+    def __init__(self, nodeInit=True):
+
+        print("Let us start this adventure together")
+        # if nodeInit:
+        rospy.init_node("talker_toolVisualizer", anonymous=True)
+        print("I prepared a node")
+        self.pub_toolMarker_ur5 = rospy.Publisher("/ur5/tool_marker", MarkerArray, queue_size=5)
+        print("What about another marker")
+        self.pub_toolMarker_kuka = rospy.Publisher("/lwr/tool_marker", Marker, queue_size=5)
+
+
+    def run(self):
+        self.freq = 80
+        self.rate = rospy.Rate(self.freq)    
+
+        print("Starting run")
+        while not rospy.is_shutdown():
+
+            self.update()
+            print("Publishing the other another tool.")
+            self.rate.sleep()
+        
+
+    def update(self):
+        timeNow = rospy.Time.now()
+        for mm in range(len(self.markers_wheel)):
+            self.markers_wheel.header.stamp = timeNow
+        
+        self.pub_toolMarker_ur5.publish(self.pub_toolMarker_ur5)
+
+        
+        
+    def set_up_wheel(self):
+        self.markers_wheel = Marker()
+
+        wheel_plate = Marker()
+        wheel_plate.header.frame_id = "/robotiq_force_torque_frame_id"
+        wheel_plate.ns = "ur5"
+        wheel_plate.id = 0
+        wheel_plate.type = wheel_plate.CYLINDER
+
+        wheel_plate.pose.position = Point(0,0,0)
+        wheel_plate.pose.orientation.w = wheel_plate.CYLINDER
+        
+        wheel_plate.scale = Vector3(0.1, 0.3, 0.3)
+        wheel_plate.color = ColorRGBA(192, 192, 192, 1)
+
+        wheel_plate.frame_locked = True
+        wheel_plate.lifetime = 0
+        
+        self.markers_wheel.append(wheel_plate)
+        
+        
+
+        
+        
+if __name__ == '__main__':
+    try:
+        # if len(sys.argv == 1)
+        # print('Input argmunts {}'.format(sys.argv[1:]))
+        # if 
+        print("Hello master. I will be publishing the tools for you.")
+        ShowTools_instance = ShowTools()
+        # signal.signal(signal.SIGINT, MoveWheelTrajectory_instance.shutdown_command)
+        
+        print("Let me get this running.")
+        if not rospy.is_shutdown():
+            ShowTools_instance.run()
+        
+    except rospy.ROSInterruptException:
+        print("Could not be run.")
+        pass
