@@ -19,8 +19,6 @@ class Recorder(object):
         self.recording = False
         self.recorded_data = []
         self.lock = Lock()
-
-        
         
     def start_recording(self):
         with self.lock:

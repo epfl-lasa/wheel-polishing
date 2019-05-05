@@ -20,7 +20,7 @@ ntpdate -q 192.168.0.20
 
 Synchronize time:
 ```
-ntpdate 192.168.0.20
+sudo ntpdate 192.168.0.20
 '''
 
 
@@ -39,14 +39,17 @@ control
 
 Publish calibration between KUKA and UR5
 ```
-roslaunch robot_calibration calibration_publishers.launch ci:=0
+roslaunch robot_calibration calibration_publishers.launch ci:=1
 '''
 Launch force torque sensors
 ```
 roslaunch netft_rdt_driver ft_sensor.launch 
 '''
+!!! Router IP/Gateway is 192.168.0.5 !!!
+MAC-Address force-torque sensor IP 00-16-BD-00-17-F8
 
-Set DS controller paramters
+
+set DS controller paramters
 ```
 rosrun rqt_reconfigure rqt_reconfigure 
 '''
@@ -57,11 +60,17 @@ Launch KUKA controller
 rosrun polishing_demo polishing_demo bou -v 0.2 -f 12 -an n
 '''
 
+
+
 Launch UR5 arm
 ```
 rosrun wheel_polishing ur5_move_wheel_sequence.py 
 '''
 
+Visualize tools
+```
+rosrun wheel_polishing visualization_tools.py
+'''
 
 ## To launch the robot
 ```
