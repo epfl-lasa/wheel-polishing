@@ -59,7 +59,6 @@ class RecordJointsStates():
         self.start_time = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
         rospy.init_node("listener_positionMeasure", anonymous=True)
 
-        self.rospack = rospkg.RosPack()
         # n_loops: negative number account result in infinite loops
         self.mutex = Lock()
 

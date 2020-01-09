@@ -54,8 +54,7 @@ class ShowTools():
                 print("Iteration #{}".format(self.it_count))
             self.it_count += 1
             self.rate.sleep()
-                
-        
+
 
     def update(self):
         timeNow = rospy.Time.now()
@@ -96,21 +95,31 @@ class ShowTools():
         self.markers_polisher.markers.append(polisher_part)
         dz += polisher_part.scale.z/2
         
-        id_it += 1
-        polisher_part = copy.deepcopy(polisher_part)
-        polisher_part.id = id_it
-        polisher_part.type = Marker().CUBE
-        polisher_part.scale = Vector3(0.0275, 0.05, 0.08)
-        dz += polisher_part.scale.z/2
-        polisher_part.pose.position = Point(0,0,dz)
-        self.markers_polisher.markers.append(polisher_part)
-        dz += polisher_part.scale.z/2
+        # id_it += 1
+        # polisher_part = copy.deepcopy(polisher_part)
+        # polisher_part.id = id_it
+        # polisher_part.type = Marker().CUBE
+        # polisher_part.scale = Vector3(0.0275, 0.05, 0.08)
+        # dz += polisher_part.scale.z/2
+        # polisher_part.pose.position = Point(0,0,dz)
+        # self.markers_polisher.markers.append(polisher_part)
+        # dz += polisher_part.scale.z/2
+
+        # id_it += 1
+        # polisher_part = copy.deepcopy(polisher_part)
+        # polisher_part.id = id_it
+        # polisher_part.type = Marker().CUBE
+        # polisher_part.scale = Vector3(0.019, 0.0275, 0.040)
+        # dz += polisher_part.scale.z/2
+        # polisher_part.pose.position = Point(0,0,dz)
+        # self.markers_polisher.markers.append(polisher_part)
+        # dz += polisher_part.scale.z/2
 
         id_it += 1
         polisher_part = copy.deepcopy(polisher_part)
         polisher_part.id = id_it
-        polisher_part.type = Marker().CUBE
-        polisher_part.scale = Vector3(0.019, 0.0275, 0.040)
+        polisher_part.type = Marker().CYLINDER
+        polisher_part.scale = Vector3(0.03, 0.03, 0.03)
         dz += polisher_part.scale.z/2
         polisher_part.pose.position = Point(0,0,dz)
         self.markers_polisher.markers.append(polisher_part)
@@ -195,7 +204,8 @@ class ShowTools():
         wheel_part.id = it_id
         wheel_part.type = Marker().CYLINDER
         wheel_part.action = Marker().ADD
-        wheel_part.scale = Vector3(0.08, 0.08, 0.035)
+        # wheel_part.scale = Vector3(0.08, 0.08, 0.035)
+        wheel_part.scale = Vector3(0.08, 0.08, 0.06)
         wheel_part.color = ColorRGBA(100./265, 100./265, 100./265, 1)
         wheel_part.pose.orientation = Quaternion(0,0,0,1)
         wheel_part.lifetime = rospy.Duration.from_sec(0)

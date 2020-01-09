@@ -61,7 +61,7 @@ MODE_GO_HOME = [
 MODE_LIST = []
 
 class MoveWheelTrajectory():
-    def __init__(self, vel_limit_max=0.7, setUp="", global_loop=-1, smoothen_velocity=True, time_between_point=1, debuggingMode=False):
+    def __init__(self, vel_limit_max=1.4, setUp="", global_loop=-1, smoothen_velocity=True, time_between_point=1, debuggingMode=False):
         # n_loops: negative number account result in infinite loops
         self.mutex = Lock()
         self.rospack = rospkg.RosPack()
@@ -581,7 +581,7 @@ class MoveWheelTrajectory():
         self.time_start_stage = rospy.get_time()
 
 
-    def callback_jointState(self, msg, k_pos=0.1, k_vel=0.1, k_acc=0.05):
+    def callback_jointState(self, msg, k_pos=0.1, k_vel=0.6, k_acc=0.05):
         # TODO test noise and get standart deviation to get a elaborate kalman filter
         with self.mutex:
             if not self.recieved_jointState_msg:
